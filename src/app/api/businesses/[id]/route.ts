@@ -51,5 +51,7 @@ export async function GET(
       : business.analysis,
   };
 
-  return NextResponse.json({ business: normalized });
+  return NextResponse.json({ business: normalized }, {
+    headers: { "Cache-Control": "private, max-age=300" },
+  });
 }

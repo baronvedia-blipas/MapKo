@@ -17,13 +17,16 @@ export async function GET() {
 
   const { data: scans, error } = await supabase
     .from("scans")
-    .select("*")
+    .select("id, query_text, status, lat, lng, radius_km, categories, total_businesses, error_message, created_at, updated_at")
     .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(50);
 
   if (error) {
     return NextResponse.json({ error: "Failed to fetch scans" }, { status: 500 });
   }
 
-  return NextResponse.json({ scans });
+  return NextResponse.json({ scans }, {
+    headers: { "Cache-Control": "private, max-age=5" },
+  });
 }

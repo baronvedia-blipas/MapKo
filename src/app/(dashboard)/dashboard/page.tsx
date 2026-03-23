@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import {
   Radar,
@@ -14,29 +15,29 @@ import {
   BarChart3,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useProfile } from "@/components/providers/profile-provider";
 import type { Scan } from "@/types";
 
+// Lazy-load recharts components (heavy library, not needed on initial render)
+const ChartSection = dynamic(() => import("@/components/dashboard/chart-section"), {
+  ssr: false,
+  loading: () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <Card className="glass"><CardContent className="p-6 h-[260px] flex items-center justify-center"><Spinner size="md" /></CardContent></Card>
+      <Card className="glass"><CardContent className="p-6 h-[260px] flex items-center justify-center"><Spinner size="md" /></CardContent></Card>
+    </div>
+  ),
+});
+
 const fadeIn = {
   hidden: { opacity: 0, y: 20 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.1, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] },
+    transition: { delay: i * 0.1, duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] },
   }),
 };
 
@@ -133,7 +134,7 @@ export default function DashboardPage() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.3 }}
       >
         <h1 className="text-2xl font-bold">
           Welcome back
@@ -184,85 +185,8 @@ export default function DashboardPage() {
           animate="visible"
           variants={fadeIn}
           custom={4}
-          className="grid grid-cols-1 lg:grid-cols-2 gap-4"
         >
-          {/* Scan activity */}
-          <Card className="glass">
-            <div className="p-6 pb-2">
-              <h2 className="text-sm font-semibold flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-blue-400" />
-                Scan Activity
-              </h2>
-            </div>
-            <CardContent className="pb-4">
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={completedScans.slice(-7).map((s) => ({
-                  name: new Date(s.created_at).toLocaleDateString("en", { month: "short", day: "numeric" }),
-                  businesses: s.total_businesses || 0,
-                }))}>
-                  <XAxis dataKey="name" tick={{ fill: "hsl(218,11%,50%)", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "hsl(218,11%,50%)", fontSize: 11 }} axisLine={false} tickLine={false} width={30} />
-                  <Tooltip
-                    contentStyle={{ background: "hsl(228,14%,9%)", border: "1px solid hsl(220,13%,14%)", borderRadius: 8, fontSize: 12 }}
-                    labelStyle={{ color: "hsl(210,40%,96%)" }}
-                    itemStyle={{ color: "#60a5fa" }}
-                  />
-                  <Bar dataKey="businesses" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Opportunity distribution */}
-          <Card className="glass">
-            <div className="p-6 pb-2">
-              <h2 className="text-sm font-semibold flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-blue-400" />
-                Opportunity Distribution
-              </h2>
-            </div>
-            <CardContent className="pb-4">
-              <div className="flex items-center justify-center gap-8">
-                <ResponsiveContainer width={160} height={160}>
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: "High (70+)", value: summary.high },
-                        { name: "Medium (40-69)", value: summary.medium },
-                        { name: "Low (0-39)", value: summary.low },
-                      ].filter((d) => d.value > 0)}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={45}
-                      outerRadius={70}
-                      paddingAngle={3}
-                      dataKey="value"
-                    >
-                      <Cell fill="#ef4444" />
-                      <Cell fill="#f59e0b" />
-                      <Cell fill="#22c55e" />
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{ background: "hsl(228,14%,9%)", border: "1px solid hsl(220,13%,14%)", borderRadius: 8, fontSize: 12 }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-3">
-                  {[
-                    { label: "High (70+)", value: summary.high, color: "bg-red-500" },
-                    { label: "Medium (40-69)", value: summary.medium, color: "bg-amber-500" },
-                    { label: "Low (0-39)", value: summary.low, color: "bg-green-500" },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-center gap-2 text-sm">
-                      <div className={`h-3 w-3 rounded-full ${item.color}`} />
-                      <span className="text-muted-foreground">{item.label}</span>
-                      <span className="font-semibold ml-auto">{item.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <ChartSection completedScans={completedScans} summary={summary} />
         </motion.div>
       )}
 

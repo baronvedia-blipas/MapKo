@@ -163,7 +163,7 @@ export default function BusinessDetailPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.25 }}
       className="space-y-6 max-w-4xl"
     >
       {/* Back button */}
@@ -407,7 +407,7 @@ export default function BusinessDetailPage() {
                   key={i}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1, duration: 0.3 }}
+                  transition={{ duration: 0.15 }}
                   className="flex items-start gap-3 p-3 rounded-lg bg-white/5"
                 >
                   <div className="h-6 w-6 rounded-full bg-amber-400/10 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">

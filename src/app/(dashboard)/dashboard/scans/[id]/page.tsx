@@ -30,8 +30,21 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { cn, getScoreColor, getScoreLabel } from "@/lib/utils";
-import { ScanMap } from "@/components/map/scan-map";
+import dynamic from "next/dynamic";
 import type { Scan, BusinessWithAnalysis, ScanStatus } from "@/types";
+
+// Lazy-load map component (Google Maps doesn't need SSR)
+const ScanMap = dynamic(
+  () => import("@/components/map/scan-map").then((mod) => ({ default: mod.ScanMap })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[500px] rounded-xl bg-card/40 border border-border/60 flex items-center justify-center">
+        <div className="text-sm text-muted-foreground">Loading map...</div>
+      </div>
+    ),
+  }
+);
 
 // ── Progress phases ──────────────────────────────────────────────
 const PHASES: { status: ScanStatus; label: string }[] = [
@@ -287,7 +300,7 @@ export default function ScanDetailPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.25 }}
       className="space-y-6"
     >
       {/* Header */}
@@ -608,7 +621,7 @@ export default function ScanDetailPage() {
                           key={biz.id}
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
-                          transition={{ delay: Math.min(i * 0.02, 0.5), duration: 0.3 }}
+                          transition={{ duration: 0.15 }}
                           className="hover:bg-accent/50 transition-colors"
                         >
                           <td className="px-4 py-3">

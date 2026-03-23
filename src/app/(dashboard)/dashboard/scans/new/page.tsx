@@ -2,16 +2,148 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { Radar, MapPin, Info, Zap } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Radar, MapPin, Info, Zap, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { LocationAutocomplete } from "@/components/scan/location-autocomplete";
-import { ScanPreviewMap } from "@/components/scan/scan-preview-map";
+import dynamic from "next/dynamic";
 import { Spinner } from "@/components/ui/spinner";
+
+// Lazy-load map preview (Google Maps doesn't need SSR)
+const ScanPreviewMap = dynamic(
+  () => import("@/components/scan/scan-preview-map").then((mod) => ({ default: mod.ScanPreviewMap })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[200px] rounded-xl bg-card/40 border border-border/60 flex items-center justify-center">
+        <div className="text-sm text-muted-foreground">Loading map...</div>
+      </div>
+    ),
+  }
+);
 import { useProfile } from "@/components/providers/profile-provider";
 import { BUSINESS_CATEGORIES, PLAN_LIMITS, type PlanTier } from "@/types";
 import { cn } from "@/lib/utils";
+
+// ── Popular Zone Presets ─────────────────────────────────────────
+interface ZonePreset {
+  name: string;
+  lat: number;
+  lng: number;
+  radiusKm: number;
+}
+
+interface CityGroup {
+  city: string;
+  zones: ZonePreset[];
+}
+
+interface CountryGroup {
+  country: string;
+  flag: string;
+  cities: CityGroup[];
+  defaultExpanded: boolean;
+}
+
+const ZONE_PRESETS: CountryGroup[] = [
+  {
+    country: "Bolivia",
+    flag: "\u{1F1E7}\u{1F1F4}",
+    defaultExpanded: true,
+    cities: [
+      {
+        city: "Santa Cruz",
+        zones: [
+          { name: "Centro (1er Anillo)", lat: -17.7833, lng: -63.1821, radiusKm: 1 },
+          { name: "Equipetrol", lat: -17.7697, lng: -63.1953, radiusKm: 1.5 },
+          { name: "Plan 3000", lat: -17.8167, lng: -63.1500, radiusKm: 2 },
+          { name: "Av. Monse\u00f1or Rivero", lat: -17.7780, lng: -63.1890, radiusKm: 1 },
+          { name: "Ventura Mall Zone", lat: -17.7620, lng: -63.2050, radiusKm: 1.5 },
+          { name: "Las Brisas", lat: -17.7550, lng: -63.1650, radiusKm: 1.5 },
+        ],
+      },
+      {
+        city: "La Paz",
+        zones: [
+          { name: "Zona Sur (Calacoto/San Miguel)", lat: -16.5280, lng: -68.0770, radiusKm: 2 },
+          { name: "Centro (El Prado)", lat: -16.4955, lng: -68.1336, radiusKm: 1 },
+        ],
+      },
+      {
+        city: "Cochabamba",
+        zones: [
+          { name: "Centro", lat: -17.3935, lng: -66.1570, radiusKm: 1.5 },
+        ],
+      },
+    ],
+  },
+  {
+    country: "Peru",
+    flag: "\u{1F1F5}\u{1F1EA}",
+    defaultExpanded: false,
+    cities: [
+      {
+        city: "Lima",
+        zones: [
+          { name: "Miraflores", lat: -12.1191, lng: -77.0300, radiusKm: 2 },
+        ],
+      },
+    ],
+  },
+  {
+    country: "Argentina",
+    flag: "\u{1F1E6}\u{1F1F7}",
+    defaultExpanded: false,
+    cities: [
+      {
+        city: "Buenos Aires",
+        zones: [
+          { name: "Palermo", lat: -34.5795, lng: -58.4258, radiusKm: 2 },
+        ],
+      },
+    ],
+  },
+  {
+    country: "Mexico",
+    flag: "\u{1F1F2}\u{1F1FD}",
+    defaultExpanded: false,
+    cities: [
+      {
+        city: "CDMX",
+        zones: [
+          { name: "Polanco", lat: -19.4320, lng: -99.1937, radiusKm: 2 },
+        ],
+      },
+    ],
+  },
+  {
+    country: "Colombia",
+    flag: "\u{1F1E8}\u{1F1F4}",
+    defaultExpanded: false,
+    cities: [
+      {
+        city: "Bogot\u00e1",
+        zones: [
+          { name: "Zona T / Zona Rosa", lat: 4.6670, lng: -74.0520, radiusKm: 1.5 },
+        ],
+      },
+    ],
+  },
+  {
+    country: "Chile",
+    flag: "\u{1F1E8}\u{1F1F1}",
+    defaultExpanded: false,
+    cities: [
+      {
+        city: "Santiago",
+        zones: [
+          { name: "Providencia", lat: -33.4264, lng: -70.6100, radiusKm: 2 },
+        ],
+      },
+    ],
+  },
+];
 
 export default function NewScanPage() {
   const router = useRouter();
@@ -23,6 +155,28 @@ export default function NewScanPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { profile, loading } = useProfile();
+  const [selectedZoneKey, setSelectedZoneKey] = useState<string | null>(null);
+  const [expandedCountries, setExpandedCountries] = useState<Set<string>>(
+    () => new Set(ZONE_PRESETS.filter((c) => c.defaultExpanded).map((c) => c.country))
+  );
+
+  function selectZone(zone: ZonePreset, city: string) {
+    const key = `${city}-${zone.name}`;
+    setSelectedZoneKey(key);
+    setQueryText(`${zone.name}, ${city}`);
+    setSelectedPlaceId(undefined);
+    setCenterCoords({ lat: zone.lat, lng: zone.lng });
+    setRadiusKm(zone.radiusKm);
+  }
+
+  function toggleCountry(country: string) {
+    setExpandedCountries((prev) => {
+      const next = new Set(prev);
+      if (next.has(country)) next.delete(country);
+      else next.add(country);
+      return next;
+    });
+  }
 
   function toggleCategory(cat: string) {
     setSelectedCategories((prev) =>
@@ -77,7 +231,7 @@ export default function NewScanPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.25 }}
       className="max-w-3xl mx-auto space-y-6"
     >
       {/* Header */}
@@ -127,6 +281,80 @@ export default function NewScanPage() {
             <p className="text-xs text-muted-foreground mt-2">
               Bolivia, Peru, Argentina, Chile, Colombia, Mexico, Paraguay, Uruguay
             </p>
+          </div>
+        </div>
+
+        {/* Popular Zones */}
+        <div className="rounded-xl bg-card/60 border border-border/60 p-5">
+          <label className="text-sm font-medium flex items-center gap-2 mb-4">
+            <MapPin className="h-4 w-4 text-blue-400" />
+            Popular Zones
+          </label>
+          <div className="space-y-3">
+            {ZONE_PRESETS.map((country) => {
+              const isExpanded = expandedCountries.has(country.country);
+              return (
+                <div key={country.country}>
+                  <button
+                    type="button"
+                    onClick={() => toggleCountry(country.country)}
+                    className="flex items-center gap-2 w-full text-left text-sm font-medium py-1.5 hover:text-foreground transition-colors"
+                  >
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                        !isExpanded && "-rotate-90"
+                      )}
+                    />
+                    <span>{country.flag} {country.country}</span>
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="pl-6 pt-1 space-y-2">
+                          {country.cities.map((cityGroup) => (
+                            <div key={cityGroup.city}>
+                              <p className="text-xs text-muted-foreground font-medium mb-1.5">{cityGroup.city}</p>
+                              <div className="flex flex-wrap gap-2">
+                                {cityGroup.zones.map((zone) => {
+                                  const key = `${cityGroup.city}-${zone.name}`;
+                                  const isSelected = selectedZoneKey === key;
+                                  return (
+                                    <button
+                                      key={key}
+                                      type="button"
+                                      onClick={() => selectZone(zone, cityGroup.city)}
+                                      className={cn(
+                                        "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-all duration-200 border",
+                                        isSelected
+                                          ? "bg-blue-500/10 border-blue-500/30 text-blue-400"
+                                          : "bg-card/40 border-border/40 text-muted-foreground hover:bg-card/80 hover:border-border hover:text-foreground"
+                                      )}
+                                    >
+                                      <MapPin className="h-3 w-3 shrink-0" />
+                                      <div className="text-left">
+                                        <span className="block leading-tight">{zone.name}</span>
+                                        <span className="block text-[10px] opacity-60 leading-tight">{cityGroup.city} &middot; {zone.radiusKm}km</span>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
           </div>
         </div>
 

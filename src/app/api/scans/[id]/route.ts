@@ -23,7 +23,7 @@ export async function GET(
   // Get scan
   const { data: scan, error } = await supabase
     .from("scans")
-    .select("*")
+    .select("id, query_text, status, lat, lng, radius_km, categories, total_businesses, error_message, created_at, updated_at")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -32,12 +32,16 @@ export async function GET(
     return NextResponse.json({ error: "Scan not found" }, { status: 404 });
   }
 
-  // Get businesses with analyses
+  // Get businesses with analyses in a single joined query
   const { data: businesses } = await supabase
     .from("businesses")
-    .select(`*, analysis:analyses(*)`)
+    .select(`id, scan_id, place_id, name, address, lat, lng, category, phone, website_url, rating, review_count, photo_count, business_status, created_at, analysis:analyses(id, business_id, has_website, website_ssl, website_responsive, website_load_time_ms, website_tech, has_social_media, social_links, review_response_rate, has_booking, has_whatsapp, profile_completeness, opportunity_score, recommendations, analyzed_at)`)
     .eq("scan_id", id)
     .order("created_at", { ascending: true });
+
+  const cacheHeader = scan.status === "completed"
+    ? "private, max-age=60"
+    : "no-store";
 
   return NextResponse.json({
     scan,
@@ -45,5 +49,7 @@ export async function GET(
       ...b,
       analysis: Array.isArray(b.analysis) ? b.analysis[0] || null : b.analysis,
     })) || [],
+  }, {
+    headers: { "Cache-Control": cacheHeader },
   });
 }

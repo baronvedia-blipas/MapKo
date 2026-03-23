@@ -155,14 +155,14 @@ export async function POST(req: NextRequest) {
       .update({ status: "analyzing", total_businesses: businessRows.length })
       .eq("id", scanId);
 
-    // ── Phase 2: Analyzing (parallel batches of 5) ──────────
+    // ── Phase 2: Analyzing (parallel batches of 8) ──────────
     const { data: businesses } = await admin
       .from("businesses")
       .select("*")
       .eq("scan_id", scanId);
 
     if (businesses) {
-      const ANALYSIS_BATCH = 5;
+      const ANALYSIS_BATCH = 8;
       for (let i = 0; i < businesses.length; i += ANALYSIS_BATCH) {
         const batch = businesses.slice(i, i + ANALYSIS_BATCH);
 
@@ -173,37 +173,43 @@ export async function POST(req: NextRequest) {
               let lastReviewDate: string | null = null;
               let hasBooking = false;
 
-              // Fetch place details (website, reviews, booking) — with retry
-              try {
-                const details = await withRetry(
-                  () => getPlaceDetails({ placeId: biz.place_id }),
-                  `getPlaceDetails(${biz.place_id})`
-                );
+              // Fetch place details only if business might have more data
+              // Skip Place Details for businesses with no website from Nearby Search
+              // — they likely lack online presence, so score them directly
+              const needsDetails = biz.website_url || biz.review_count > 5;
 
-                if (details.websiteUri && !biz.website_url) {
-                  biz.website_url = details.websiteUri;
-                  await admin
-                    .from("businesses")
-                    .update({ website_url: details.websiteUri })
-                    .eq("id", biz.id);
-                }
+              if (needsDetails) {
+                try {
+                  const details = await withRetry(
+                    () => getPlaceDetails({ placeId: biz.place_id }),
+                    `getPlaceDetails(${biz.place_id})`
+                  );
 
-                if (details.reviews) {
-                  const ownerReplies = details.reviews.filter(
-                    (r: { authorAttribution?: { displayName?: string } }) =>
-                      r.authorAttribution?.displayName === "Owner"
-                  ).length;
-                  reviewResponseRate =
-                    details.reviews.length > 0
-                      ? ownerReplies / details.reviews.length
-                      : 0;
-                  if (details.reviews.length > 0) {
-                    lastReviewDate = details.reviews[0].publishTime || null;
+                  if (details.websiteUri && !biz.website_url) {
+                    biz.website_url = details.websiteUri;
+                    await admin
+                      .from("businesses")
+                      .update({ website_url: details.websiteUri })
+                      .eq("id", biz.id);
                   }
+
+                  if (details.reviews) {
+                    const ownerReplies = details.reviews.filter(
+                      (r: { authorAttribution?: { displayName?: string } }) =>
+                        r.authorAttribution?.displayName === "Owner"
+                    ).length;
+                    reviewResponseRate =
+                      details.reviews.length > 0
+                        ? ownerReplies / details.reviews.length
+                        : 0;
+                    if (details.reviews.length > 0) {
+                      lastReviewDate = details.reviews[0].publishTime || null;
+                    }
+                  }
+                  hasBooking = details.reservable || false;
+                } catch {
+                  // Details fetch failed after retries — continue with basic data
                 }
-                hasBooking = details.reservable || false;
-              } catch {
-                // Details fetch failed after retries — continue with basic data
               }
 
               // Analyze website if exists — with retry

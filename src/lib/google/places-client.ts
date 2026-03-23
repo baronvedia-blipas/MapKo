@@ -115,9 +115,9 @@ async function searchNearbyAllPages(
       pageToken = result.nextPageToken || undefined;
       page++;
 
-      // Google requires ~2 second delay before using nextPageToken
+      // Google requires a delay before using nextPageToken
       if (pageToken) {
-        await sleep(2000);
+        await sleep(1500);
       }
     } catch (e) {
       console.error(`Search failed for type ${type}:`, e);
