@@ -62,7 +62,7 @@ function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-md glass">
+    <Card className="w-full max-w-md glass glow-blue">
       <CardHeader className="text-center space-y-2">
         <Link href="/landing" className="inline-block mb-2">
           <h1 className="text-3xl font-bold gradient-text tracking-tight">
@@ -122,7 +122,7 @@ function LoginForm() {
             />
           </div>
 
-          <Button type="submit" className="w-full h-10" disabled={loading}>
+          <Button type="submit" className="w-full h-10 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/20" disabled={loading}>
             {loading ? "Signing in..." : "Sign in"}
           </Button>
         </form>

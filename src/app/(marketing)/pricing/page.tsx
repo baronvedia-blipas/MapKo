@@ -108,16 +108,16 @@ function PlanCard({ plan, delay }: { plan: Plan; delay: number }) {
     <FadeInUp delay={delay}>
       <div
         className={cn(
-          "relative flex flex-col rounded-2xl p-8 h-full transition-all duration-300",
+          "relative flex flex-col rounded-2xl p-8 h-full transition-all duration-500",
           plan.highlighted
-            ? "glass border-blue-500/40 shadow-[0_0_40px_-12px_rgba(59,130,246,0.3)]"
-            : "glass glass-hover"
+            ? "glass glow-blue-lg hover:shadow-[0_0_60px_-12px_rgba(59,130,246,0.35)] hover:-translate-y-1"
+            : "glass glass-hover hover:-translate-y-1"
         )}
       >
         {/* Popular badge */}
         {plan.highlighted && (
           <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-            <Badge className="bg-blue-500 text-white border-blue-400/50 shadow-lg shadow-blue-500/30 px-4 py-1">
+            <Badge className="bg-gradient-to-r from-blue-500 to-purple-500 text-white border-0 shadow-lg shadow-blue-500/30 px-4 py-1">
               <Sparkles className="h-3 w-3 mr-1.5" />
               Most Popular
             </Badge>
@@ -157,8 +157,8 @@ function PlanCard({ plan, delay }: { plan: Plan; delay: number }) {
             className={cn(
               "w-full",
               plan.highlighted
-                ? "bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/25"
-                : "bg-white/10 hover:bg-white/15 text-white border border-white/10"
+                ? "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg shadow-blue-500/25"
+                : "bg-white/[0.06] hover:bg-white/10 text-white border border-white/10"
             )}
           >
             {plan.cta}

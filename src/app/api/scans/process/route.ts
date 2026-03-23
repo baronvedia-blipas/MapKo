@@ -4,8 +4,44 @@ import { searchNearbyBulk, getPlaceDetails } from "@/lib/google/places-client";
 import { mapGoogleTypeToCategory } from "@/lib/google/category-mapper";
 import { analyzeWebsite } from "@/lib/analyzer/website-checker";
 import { calculateOpportunityScore } from "@/lib/analyzer/score-calculator";
+import { sendScanCompleteEmail } from "@/lib/email/scan-notification";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PlaceResult = any;
+
+const MAX_RETRIES = 1;
+const RETRY_DELAY_MS = 2000;
+
+/** Sleep helper */
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * Retry wrapper: runs `fn` up to `maxRetries + 1` times (1 initial + N retries).
+ * Waits `delayMs` between attempts.
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  maxRetries = MAX_RETRIES,
+  delayMs = RETRY_DELAY_MS
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxRetries) {
+        console.warn(
+          `[Retry] ${label} failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delayMs}ms...`
+        );
+        await sleep(delayMs);
+      }
+    }
+  }
+  throw lastError;
+}
 
 /**
  * Internal endpoint that processes a scan — called fire-and-forget from /api/scans/create.
@@ -31,22 +67,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Scan not found" }, { status: 404 });
     }
 
+    // Prevent re-processing a scan that is already in progress
+    if (scan.status === "scanning" || scan.status === "analyzing") {
+      return NextResponse.json(
+        { error: "Scan is already being processed" },
+        { status: 409 }
+      );
+    }
+
     // ── Phase 1: Scanning ──────────────────────────────────
     await admin
       .from("scans")
-      .update({ status: "scanning" })
+      .update({ status: "scanning", error_message: null })
       .eq("id", scanId);
 
     // Search for businesses
     const includedTypes =
       scan.categories.length > 0 ? scan.categories : undefined;
 
-    const places = await searchNearbyBulk({
-      lat: scan.lat,
-      lng: scan.lng,
-      radiusKm: scan.radius_km,
-      includedTypes,
-    });
+    const places = await withRetry(
+      () =>
+        searchNearbyBulk({
+          lat: scan.lat,
+          lng: scan.lng,
+          radiusKm: scan.radius_km,
+          includedTypes,
+        }),
+      `searchNearbyBulk for scan ${scanId}`
+    );
 
     // Check result limit for free plan
     const { data: profile } = await admin
@@ -109,9 +157,12 @@ export async function POST(req: NextRequest) {
               let lastReviewDate: string | null = null;
               let hasBooking = false;
 
-              // Fetch place details (website, reviews, booking)
+              // Fetch place details (website, reviews, booking) — with retry
               try {
-                const details = await getPlaceDetails({ placeId: biz.place_id });
+                const details = await withRetry(
+                  () => getPlaceDetails({ placeId: biz.place_id }),
+                  `getPlaceDetails(${biz.place_id})`
+                );
 
                 if (details.websiteUri && !biz.website_url) {
                   biz.website_url = details.websiteUri;
@@ -136,13 +187,20 @@ export async function POST(req: NextRequest) {
                 }
                 hasBooking = details.reservable || false;
               } catch {
-                // Details fetch failed — continue with basic data
+                // Details fetch failed after retries — continue with basic data
               }
 
-              // Analyze website if exists
+              // Analyze website if exists — with retry
               let websiteAnalysis = null;
               if (biz.website_url) {
-                websiteAnalysis = await analyzeWebsite(biz.website_url);
+                try {
+                  websiteAnalysis = await withRetry(
+                    () => analyzeWebsite(biz.website_url),
+                    `analyzeWebsite(${biz.website_url})`
+                  );
+                } catch {
+                  // Website analysis failed after retries — continue without it
+                }
               }
 
               // Calculate score
@@ -197,6 +255,45 @@ export async function POST(req: NextRequest) {
       .from("scans")
       .update({ status: "completed", updated_at: new Date().toISOString() })
       .eq("id", scanId);
+
+    // ── Email notification (non-blocking) ──────────────────
+    // Compute summary stats for the email
+    const { data: analysedBiz } = await admin
+      .from("businesses")
+      .select("id, analyses!inner(opportunity_score)")
+      .eq("scan_id", scanId);
+
+    const totalBusinesses = businessRows.length;
+    let avgScore = 0;
+    let highOpportunity = 0;
+
+    if (analysedBiz && analysedBiz.length > 0) {
+      const scores = analysedBiz.map(
+        (b: { analyses: { opportunity_score: number }[] }) =>
+          b.analyses?.[0]?.opportunity_score ?? 0
+      );
+      avgScore = Math.round(
+        scores.reduce((sum: number, s: number) => sum + s, 0) / scores.length
+      );
+      highOpportunity = scores.filter((s: number) => s >= 70).length;
+    }
+
+    // Get user email from Supabase auth
+    const { data: userData } = await admin.auth.admin.getUserById(scan.user_id);
+    const userEmail = userData?.user?.email;
+
+    if (userEmail) {
+      // Fire-and-forget — don't await
+      sendScanCompleteEmail(userEmail, {
+        queryText: scan.query_text,
+        totalBusinesses,
+        avgScore,
+        highOpportunity,
+        scanId,
+      }).catch((err) =>
+        console.error("[EMAIL] Notification failed:", err)
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

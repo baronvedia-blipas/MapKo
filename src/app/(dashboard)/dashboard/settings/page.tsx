@@ -14,49 +14,32 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { Lock, Save, User, Shield, Key } from "lucide-react";
-import type { Profile, PlanTier } from "@/types";
+import { useProfile } from "@/components/providers/profile-provider";
+import type { PlanTier } from "@/types";
 
 export default function SettingsPage() {
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { profile, loading } = useProfile();
   const [email, setEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function loadProfile() {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (!user) {
-          setError("Not authenticated");
-          return;
-        }
-
-        setEmail(user.email ?? "");
-
-        const { data, error: fetchError } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .single();
-
-        if (fetchError) throw fetchError;
-        setProfile(data);
-        setCompanyName(data.company_name ?? "");
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load profile");
-      } finally {
-        setLoading(false);
-      }
+    if (profile && !initialized) {
+      setCompanyName(profile.company_name ?? "");
+      setInitialized(true);
     }
+  }, [profile, initialized]);
 
-    loadProfile();
+  useEffect(() => {
+    async function getEmail() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setEmail(user.email ?? "");
+    }
+    getEmail();
   }, []);
 
   async function handleSave() {

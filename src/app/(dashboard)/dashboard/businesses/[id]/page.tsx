@@ -16,6 +16,13 @@ import {
   Code,
   BarChart3,
   Lightbulb,
+  MessageCircle,
+  Mail,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  Download,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -65,6 +72,31 @@ export default function BusinessDetailPage() {
   const [business, setBusiness] = useState<BusinessWithAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  async function handleDownloadPdf() {
+    if (downloadingPdf) return;
+    setDownloadingPdf(true);
+    try {
+      const res = await fetch(`/api/businesses/${id}/report`);
+      if (!res.ok) throw new Error("Failed to generate report");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download =
+        res.headers.get("Content-Disposition")?.match(/filename="(.+)"/)?.[1] ??
+        "mapko-report.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Silently fail — could add toast notification here
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -161,7 +193,7 @@ export default function BusinessDetailPage() {
                   </div>
                 )}
               </div>
-              <div className="flex gap-2 mt-3">
+              <div className="flex flex-wrap gap-2 mt-3">
                 <a
                   href={`https://www.google.com/maps/place/?q=place_id:${business.place_id}`}
                   target="_blank"
@@ -182,6 +214,34 @@ export default function BusinessDetailPage() {
                     </Button>
                   </a>
                 )}
+                {business.phone && (
+                  <a
+                    href={`https://wa.me/${business.phone.replace(/[\s\-()]/g, "")}?text=${encodeURIComponent("Hi! I found your business on Google Maps and I'd like to offer you digital services to improve your online presence. Can we talk?")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button
+                      size="sm"
+                      className="bg-[#25D366] hover:bg-[#1da851] text-white border-0"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      Contact via WhatsApp
+                    </Button>
+                  </a>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadPdf}
+                  disabled={downloadingPdf}
+                >
+                  {downloadingPdf ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  {downloadingPdf ? "Generating..." : "Download PDF Report"}
+                </Button>
               </div>
             </div>
 
@@ -354,11 +414,218 @@ export default function BusinessDetailPage() {
         </Card>
       )}
 
+      {/* Outreach Templates */}
+      {analysis && (
+        <OutreachTemplates
+          businessName={business.name}
+          category={business.category}
+          hasWebsite={analysis.has_website}
+          hasSocialMedia={analysis.has_social_media}
+        />
+      )}
+
       {/* Back button */}
       <Button variant="outline" onClick={() => router.back()}>
         <ArrowLeft className="h-4 w-4" />
         Back to Scan
       </Button>
     </motion.div>
+  );
+}
+
+// ── Outreach Templates ───────────────────────────────────────────
+
+interface TemplateData {
+  id: string;
+  title: string;
+  subject: string;
+  body: string;
+}
+
+function OutreachTemplates({
+  businessName,
+  category,
+  hasWebsite,
+  hasSocialMedia,
+}: {
+  businessName: string;
+  category: string;
+  hasWebsite: boolean;
+  hasSocialMedia: boolean;
+}) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const templates: TemplateData[] = [];
+
+  if (!hasWebsite) {
+    templates.push({
+      id: "no-website",
+      title: "No Website",
+      subject: `${businessName} - Let's build your online presence`,
+      body: `Hi,
+
+I came across ${businessName} while researching ${category} businesses in your area, and I noticed you don't currently have a website.
+
+In today's digital landscape, having a professional website is essential for attracting new customers and building trust. A well-designed website can help ${businessName}:
+
+- Appear in Google search results when potential customers look for ${category} services
+- Showcase your products, services, and customer reviews
+- Allow customers to find your hours, location, and contact information easily
+- Stand out from competitors who already have an online presence
+
+I specialize in helping ${category} businesses like yours establish a strong digital presence. I'd love to discuss how we can create a website that drives real results for ${businessName}.
+
+Would you be available for a quick 15-minute call this week?
+
+Best regards`,
+    });
+  }
+
+  templates.push({
+    id: "improve-presence",
+    title: "Improve Online Presence",
+    subject: `Boost ${businessName}'s online visibility and attract more customers`,
+    body: `Hi,
+
+I recently found ${businessName} on Google Maps and took a closer look at your current online presence. I see a great opportunity to improve your digital footprint and attract more customers.
+
+Here are a few areas where ${businessName} could benefit from some enhancements:
+
+- Optimizing your Google Business Profile for better local search rankings
+- Improving your online review strategy to build social proof
+- Ensuring your business information is consistent across all platforms
+- Implementing SEO best practices specific to the ${category} industry
+
+I work with ${category} businesses to help them grow their customer base through strategic digital improvements. Many of my clients see measurable results within the first few months.
+
+I'd love to share some specific insights I've gathered about ${businessName}'s online presence. Would you be open to a brief conversation?
+
+Best regards`,
+  });
+
+  if (!hasSocialMedia) {
+    templates.push({
+      id: "social-media",
+      title: "Social Media",
+      subject: `${businessName} - Reach more customers through social media`,
+      body: `Hi,
+
+I was looking into ${businessName} and noticed you don't currently have an active social media presence. In the ${category} industry, social media has become one of the most effective ways to connect with customers and grow your business.
+
+Here's what a solid social media strategy could do for ${businessName}:
+
+- Increase brand awareness in your local area
+- Engage directly with current and potential customers
+- Showcase your work, products, and happy customers
+- Drive more foot traffic and online inquiries
+- Build a loyal community around your brand
+
+I help ${category} businesses create and manage social media strategies that deliver real, measurable results — without taking up your valuable time.
+
+Would you be interested in a quick chat about how social media could benefit ${businessName}?
+
+Best regards`,
+    });
+  }
+
+  if (templates.length === 0) return null;
+
+  async function handleCopy(template: TemplateData) {
+    const fullText = `Subject: ${template.subject}\n\n${template.body}`;
+    await navigator.clipboard.writeText(fullText);
+    setCopied(template.id);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  return (
+    <Card className="glass">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Mail className="h-5 w-5 text-blue-400" />
+          Outreach Templates
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {templates.map((template) => {
+            const isExpanded = expanded === template.id;
+            return (
+              <div
+                key={template.id}
+                className="rounded-lg border border-white/10 bg-white/5 overflow-hidden"
+              >
+                <button
+                  onClick={() => setExpanded(isExpanded ? null : template.id)}
+                  className="w-full flex items-center justify-between p-4 text-left hover:bg-white/5 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-blue-400/10 text-blue-400 flex items-center justify-center shrink-0">
+                      <Mail className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{template.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {template.subject}
+                      </p>
+                    </div>
+                  </div>
+                  {isExpanded ? (
+                    <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                  )}
+                </button>
+                {isExpanded && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    transition={{ duration: 0.2 }}
+                    className="border-t border-white/10"
+                  >
+                    <div className="p-4 space-y-3">
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-1">
+                          Subject
+                        </p>
+                        <p className="text-sm bg-white/5 rounded-md px-3 py-2">
+                          {template.subject}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-1">
+                          Body
+                        </p>
+                        <pre className="text-sm bg-white/5 rounded-md px-3 py-2 whitespace-pre-wrap font-sans">
+                          {template.body}
+                        </pre>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCopy(template)}
+                        className="w-full sm:w-auto"
+                      >
+                        {copied === template.id ? (
+                          <>
+                            <Check className="h-4 w-4 text-green-400" />
+                            Copied!
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-4 w-4" />
+                            Copy to Clipboard
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

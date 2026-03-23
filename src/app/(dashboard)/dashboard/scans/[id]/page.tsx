@@ -18,13 +18,19 @@ import {
   AlertTriangle,
   Eye,
   Share2,
+  Search,
+  Trash2,
+  ExternalLink,
+  MessageCircle,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { cn, getScoreColor, getScoreLabel } from "@/lib/utils";
+import { ScanMap } from "@/components/map/scan-map";
 import type { Scan, BusinessWithAnalysis, ScanStatus } from "@/types";
 
 // ── Progress phases ──────────────────────────────────────────────
@@ -57,7 +63,10 @@ export default function ScanDetailPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filterCategory, setFilterCategory] = useState("");
   const [filterScore, setFilterScore] = useState("");
+  const [searchText, setSearchText] = useState("");
   const [exporting, setExporting] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // ── Fetch / poll ─────────────────────────────────────────────
   const fetchScan = useCallback(async () => {
@@ -117,6 +126,47 @@ export default function ScanDetailPage() {
     }
   }
 
+  // ── Retry handler ──────────────────────────────────────────
+  async function handleRetry() {
+    if (!scan || retrying) return;
+    setRetrying(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/scans/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scanId: scan.id }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Retry failed");
+      }
+      // Re-fetch scan to pick up the new "scanning" status and start polling
+      await fetchScan();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Retry failed");
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  // ── Delete handler ─────────────────────────────────────────
+  async function handleDelete() {
+    if (!scan || deleting) return;
+    if (!window.confirm("Are you sure you want to delete this scan? This action cannot be undone.")) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/scans/${scan.id}/delete`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete scan");
+      router.push("/dashboard/scans");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete scan");
+      setDeleting(false);
+    }
+  }
+
   // ── Sort & filter ────────────────────────────────────────────
   const categories = useMemo(() => {
     const cats = new Set(businesses.map((b) => b.category));
@@ -125,6 +175,15 @@ export default function ScanDetailPage() {
 
   const filtered = useMemo(() => {
     let list = [...businesses];
+
+    if (searchText) {
+      const q = searchText.toLowerCase();
+      list = list.filter(
+        (b) =>
+          b.name.toLowerCase().includes(q) ||
+          b.address.toLowerCase().includes(q)
+      );
+    }
 
     if (filterCategory) {
       list = list.filter((b) => b.category === filterCategory);
@@ -163,7 +222,7 @@ export default function ScanDetailPage() {
     });
 
     return list;
-  }, [businesses, filterCategory, filterScore, sortKey, sortDir]);
+  }, [businesses, searchText, filterCategory, filterScore, sortKey, sortDir]);
 
   // ── Score summary ────────────────────────────────────────────
   const summary = useMemo(() => {
@@ -232,7 +291,7 @@ export default function ScanDetailPage() {
       className="space-y-6"
     >
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
           <button
             onClick={() => router.push("/dashboard/scans")}
@@ -241,34 +300,48 @@ export default function ScanDetailPage() {
             <ArrowLeft className="h-4 w-4" />
             Back to Scans
           </button>
-          <h1 className="text-2xl font-bold">{scan.query_text}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">{scan.query_text}</h1>
           <p className="text-muted-foreground text-sm mt-1">
             {scan.radius_km}km radius &middot; Created{" "}
             {new Date(scan.created_at).toLocaleDateString()}
           </p>
         </div>
-        {isCompleted && (
-          <div className="flex gap-2 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport("csv")}
-              disabled={!!exporting}
-            >
-              {exporting === "csv" ? <Spinner size="sm" /> : <Download className="h-4 w-4" />}
-              Export CSV
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport("xlsx")}
-              disabled={!!exporting}
-            >
-              {exporting === "xlsx" ? <Spinner size="sm" /> : <Download className="h-4 w-4" />}
-              Export XLSX
-            </Button>
-          </div>
-        )}
+        <div className="flex gap-2 shrink-0">
+          {isCompleted && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleExport("csv")}
+                disabled={!!exporting}
+                className="flex-1 sm:flex-none"
+              >
+                {exporting === "csv" ? <Spinner size="sm" /> : <Download className="h-4 w-4" />}
+                Export CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleExport("xlsx")}
+                disabled={!!exporting}
+                className="flex-1 sm:flex-none"
+              >
+                {exporting === "xlsx" ? <Spinner size="sm" /> : <Download className="h-4 w-4" />}
+                Export XLSX
+              </Button>
+            </>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex-1 sm:flex-none text-destructive hover:text-destructive hover:bg-destructive/10"
+          >
+            {deleting ? <Spinner size="sm" /> : <Trash2 className="h-4 w-4" />}
+            Delete
+          </Button>
+        </div>
       </div>
 
       {/* Progress indicator */}
@@ -288,7 +361,7 @@ export default function ScanDetailPage() {
                           ? "bg-primary border-primary text-primary-foreground"
                           : isActive
                           ? "border-primary text-primary animate-pulse"
-                          : "border-white/20 text-muted-foreground"
+                          : "border-border text-muted-foreground"
                       )}
                     >
                       {i + 1}
@@ -305,7 +378,7 @@ export default function ScanDetailPage() {
                       <div
                         className={cn(
                           "flex-1 h-0.5 mx-2",
-                          isDone ? "bg-primary" : "bg-white/10"
+                          isDone ? "bg-primary" : "bg-muted"
                         )}
                       />
                     )}
@@ -314,7 +387,7 @@ export default function ScanDetailPage() {
               })}
             </div>
             {isInProgress && (
-              <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+              <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
                 <motion.div
                   className="h-full bg-primary rounded-full"
                   initial={{ width: "0%" }}
@@ -347,9 +420,13 @@ export default function ScanDetailPage() {
                 {scan.error_message || "An unexpected error occurred during scanning."}
               </p>
             </div>
-            <Button onClick={fetchScan} variant="outline">
-              <RefreshCw className="h-4 w-4" />
-              Retry
+            <Button onClick={handleRetry} variant="outline" disabled={retrying}>
+              {retrying ? (
+                <Spinner size="sm" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {retrying ? "Retrying..." : "Retry"}
             </Button>
           </CardContent>
         </Card>
@@ -392,7 +469,7 @@ export default function ScanDetailPage() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 bg-white/5 rounded-lg p-1 w-fit">
+          <div className="flex gap-1 rounded-lg p-1 w-fit" style={{ background: "hsl(var(--tab-bg))" }}>
             <button
               onClick={() => setActiveTab("map")}
               className={cn(
@@ -421,36 +498,39 @@ export default function ScanDetailPage() {
 
           {/* Map View tab */}
           {activeTab === "map" && (
-            <Card className="glass overflow-hidden">
-              <div className="h-[400px] bg-slate-800/50 flex items-center justify-center">
-                <div className="text-center">
-                  <MapPin className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-muted-foreground">
-                    Interactive Map — {businesses.length} businesses plotted
-                  </p>
-                  <p className="text-xs text-muted-foreground/60 mt-1">
-                    Google Maps integration coming soon
-                  </p>
-                </div>
-              </div>
-            </Card>
+            <ScanMap
+              businesses={businesses}
+              center={{ lat: scan.lat, lng: scan.lng }}
+              radiusKm={scan.radius_km}
+            />
           )}
 
           {/* List View tab */}
           {activeTab === "list" && (
             <Card className="glass overflow-hidden">
               {/* Filters */}
-              <div className="flex flex-wrap items-center gap-3 p-4 border-b border-white/10">
-                <Filter className="h-4 w-4 text-muted-foreground" />
-                <Select
-                  options={[
-                    { value: "", label: "All Categories" },
-                    ...categories.map((c) => ({ value: c, label: c })),
-                  ]}
-                  value={filterCategory}
-                  onChange={(e) => setFilterCategory(e.target.value)}
-                  className="w-48"
-                />
+              <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 p-4 border-b border-border">
+                <div className="relative w-full sm:w-56">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name or address..."
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    className="pl-8"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <Select
+                    options={[
+                      { value: "", label: "All Categories" },
+                      ...categories.map((c) => ({ value: c, label: c })),
+                    ]}
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="w-full sm:w-48"
+                  />
+                </div>
                 <Select
                   options={[
                     { value: "", label: "All Scores" },
@@ -460,18 +540,18 @@ export default function ScanDetailPage() {
                   ]}
                   value={filterScore}
                   onChange={(e) => setFilterScore(e.target.value)}
-                  className="w-44"
+                  className="w-full sm:w-44"
                 />
-                <span className="text-sm text-muted-foreground ml-auto">
+                <span className="text-sm text-muted-foreground sm:ml-auto">
                   {filtered.length} of {businesses.length} businesses
                 </span>
               </div>
 
               {/* Table */}
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[700px]">
                   <thead>
-                    <tr className="border-b border-white/10">
+                    <tr className="border-b border-border">
                       <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">
                         Name
                       </th>
@@ -516,7 +596,7 @@ export default function ScanDetailPage() {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-border/50">
                     {filtered.map((biz, i) => {
                       const score = biz.analysis?.opportunity_score ?? 0;
                       const scoreColor = getScoreColor(score);
@@ -529,11 +609,26 @@ export default function ScanDetailPage() {
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           transition={{ delay: Math.min(i * 0.02, 0.5), duration: 0.3 }}
-                          className="hover:bg-white/5 transition-colors"
+                          className="hover:bg-accent/50 transition-colors"
                         >
                           <td className="px-4 py-3">
                             <div>
-                              <p className="font-medium text-sm">{biz.name}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-medium text-sm">{biz.name}</p>
+                                <a
+                                  href={
+                                    (biz.google_data?.googleMapsUri as string) ||
+                                    `https://www.google.com/maps/place/?q=place_id:${biz.place_id}`
+                                  }
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                  title="Open in Google Maps"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </a>
+                              </div>
                               <p className="text-xs text-muted-foreground truncate max-w-[200px]">
                                 {biz.address}
                               </p>
@@ -581,12 +676,30 @@ export default function ScanDetailPage() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <Link href={`/dashboard/businesses/${biz.id}`}>
-                              <Button variant="ghost" size="sm">
-                                <Eye className="h-4 w-4" />
-                                View
-                              </Button>
-                            </Link>
+                            <div className="flex items-center justify-end gap-1">
+                              {biz.phone && (
+                                <a
+                                  href={`https://wa.me/${biz.phone.replace(/[\s\-()]/g, "")}?text=${encodeURIComponent("Hi! I found your business on Google Maps and I'd like to offer you digital services to improve your online presence. Can we talk?")}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-[#25D366] hover:text-[#1da851] hover:bg-[#25D366]/10"
+                                    title="Contact via WhatsApp"
+                                  >
+                                    <MessageCircle className="h-4 w-4" />
+                                  </Button>
+                                </a>
+                              )}
+                              <Link href={`/dashboard/businesses/${biz.id}`}>
+                                <Button variant="ghost" size="sm">
+                                  <Eye className="h-4 w-4" />
+                                  View
+                                </Button>
+                              </Link>
+                            </div>
                           </td>
                         </motion.tr>
                       );

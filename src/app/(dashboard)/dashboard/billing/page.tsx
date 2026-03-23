@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useState, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -19,8 +18,10 @@ import {
   Zap,
   Building2,
   Sparkles,
+  Loader2,
 } from "lucide-react";
-import type { Profile, PlanTier, PLAN_LIMITS } from "@/types";
+import { useProfile } from "@/components/providers/profile-provider";
+import type { PlanTier } from "@/types";
 import { cn } from "@/lib/utils";
 
 interface PlanInfo {
@@ -72,53 +73,40 @@ const PLANS: PlanInfo[] = [
 ];
 
 export default function BillingPage() {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { profile, loading } = useProfile();
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadProfile() {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+  const handleCheckout = useCallback(async (planId: "pro" | "agency") => {
+    setCheckoutLoading(planId);
+    setCheckoutError(null);
 
-        if (!user) {
-          setError("Not authenticated");
-          return;
-        }
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId }),
+      });
 
-        const { data, error: fetchError } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("user_id", user.id)
-          .single();
+      const data = await res.json();
 
-        if (fetchError) throw fetchError;
-        setProfile(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load billing info");
-      } finally {
-        setLoading(false);
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to create checkout session");
       }
-    }
 
-    loadProfile();
+      window.location.href = data.url;
+    } catch (err) {
+      setCheckoutError(
+        err instanceof Error ? err.message : "Something went wrong"
+      );
+      setCheckoutLoading(null);
+    }
   }, []);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh]">
         <Spinner size="lg" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <p className="text-red-400">{error}</p>
       </div>
     );
   }
@@ -138,6 +126,9 @@ export default function BillingPage() {
         <p className="text-muted-foreground mt-1">
           Manage your subscription and usage
         </p>
+        {checkoutError && (
+          <p className="text-red-400 text-sm mt-2">{checkoutError}</p>
+        )}
       </div>
 
       {/* Current Plan Overview */}
@@ -174,10 +165,14 @@ export default function BillingPage() {
               <Button
                 variant="outline"
                 className="mt-4"
+                disabled={checkoutLoading === currentPlan}
                 onClick={() =>
-                  alert("Stripe integration coming soon!")
+                  handleCheckout(currentPlan as "pro" | "agency")
                 }
               >
+                {checkoutLoading === currentPlan && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
                 Manage Subscription
               </Button>
             )}
@@ -283,11 +278,15 @@ export default function BillingPage() {
                     <Button
                       className="w-full"
                       variant={plan.tier === "pro" ? "default" : "outline"}
+                      disabled={checkoutLoading === plan.tier || plan.tier === "free"}
                       onClick={() =>
-                        alert("Stripe integration coming soon!")
+                        handleCheckout(plan.tier as "pro" | "agency")
                       }
                     >
-                      Upgrade to {plan.name}
+                      {checkoutLoading === plan.tier && (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      )}
+                      {plan.tier === "free" ? "Downgrade" : `Upgrade to ${plan.name}`}
                     </Button>
                   )}
                 </CardFooter>

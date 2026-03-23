@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Radar, Eye, Search, Plus } from "lucide-react";
+import { Radar, Eye, Search, Plus, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,23 @@ export default function ScansPage() {
   const [scans, setScans] = useState<Scan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(scanId: string) {
+    if (!window.confirm("Are you sure you want to delete this scan? This action cannot be undone.")) {
+      return;
+    }
+    setDeletingId(scanId);
+    try {
+      const res = await fetch(`/api/scans/${scanId}/delete`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete scan");
+      setScans((prev) => prev.filter((s) => s.id !== scanId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete scan");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -155,12 +172,27 @@ export default function ScansPage() {
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <Link href={`/dashboard/scans/${scan.id}`}>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4" />
-                            View
+                        <div className="flex items-center justify-end gap-1">
+                          <Link href={`/dashboard/scans/${scan.id}`}>
+                            <Button variant="ghost" size="sm">
+                              <Eye className="h-4 w-4" />
+                              View
+                            </Button>
+                          </Link>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(scan.id)}
+                            disabled={deletingId === scan.id}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            {deletingId === scan.id ? (
+                              <Spinner size="sm" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
                           </Button>
-                        </Link>
+                        </div>
                       </td>
                     </motion.tr>
                   );

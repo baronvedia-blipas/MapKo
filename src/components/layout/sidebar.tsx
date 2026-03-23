@@ -15,6 +15,9 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { useSidebar } from "@/components/providers/sidebar-provider";
+import { AnimatePresence, motion } from "framer-motion";
+import { useEffect } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -28,6 +31,26 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { isOpen, close } = useSidebar();
+
+  useEffect(() => { close(); }, [pathname, close]);
+
+  useEffect(() => {
+    function handleResize() {
+      if (window.innerWidth >= 768) close();
+    }
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [close]);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [isOpen]);
 
   async function handleLogout() {
     const supabase = createClient();
@@ -35,18 +58,21 @@ export function Sidebar() {
     router.push("/landing");
   }
 
-  return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border bg-card flex flex-col">
+  const sidebarContent = (
+    <>
       {/* Logo */}
-      <div className="flex items-center gap-2 px-6 py-5 border-b border-border">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-          <Building2 className="h-4 w-4 text-primary-foreground" />
+      <div className="flex items-center gap-3 px-6 py-5">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/20">
+          <Building2 className="h-4.5 w-4.5 text-white" />
         </div>
-        <span className="text-lg font-bold">MapKo</span>
+        <span className="text-lg font-bold tracking-tight">MapKo</span>
       </div>
 
+      {/* Separator */}
+      <div className="mx-4 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-0.5">
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
@@ -56,13 +82,21 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
                 isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  ? "text-blue-400 bg-blue-500/10"
+                  : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
               )}
             >
-              <item.icon className="h-4 w-4" />
+              {/* Active indicator glow */}
+              {isActive && (
+                <motion.div
+                  layoutId="sidebar-active"
+                  className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <item.icon className={cn("h-4 w-4", isActive && "text-blue-400")} />
               {item.label}
             </Link>
           );
@@ -70,15 +104,54 @@ export function Sidebar() {
       </nav>
 
       {/* Logout */}
-      <div className="border-t border-border p-3">
+      <div className="mx-4 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+      <div className="p-3">
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-all duration-200"
         >
           <LogOut className="h-4 w-4" />
           Log Out
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-card/80 backdrop-blur-xl border-r border-border/50 flex-col hidden md:flex">
+        {/* Subtle gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-500/[0.02] via-transparent to-purple-500/[0.01] pointer-events-none" />
+        <div className="relative flex flex-col h-full">
+          {sidebarContent}
+        </div>
+      </aside>
+
+      {/* Mobile sidebar */}
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm md:hidden"
+              onClick={close}
+            />
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="fixed left-0 top-0 z-50 h-screen w-64 bg-card border-r border-border/50 flex flex-col md:hidden"
+            >
+              {sidebarContent}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+    </>
   );
 }

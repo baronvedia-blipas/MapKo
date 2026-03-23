@@ -50,7 +50,7 @@ export default function SignupPage() {
   }
 
   return (
-    <Card className="w-full max-w-md glass">
+    <Card className="w-full max-w-md glass glow-blue">
       <CardHeader className="text-center space-y-2">
         <Link href="/landing" className="inline-block mb-2">
           <h1 className="text-3xl font-bold gradient-text tracking-tight">

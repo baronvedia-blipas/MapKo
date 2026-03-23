@@ -1,5 +1,9 @@
+"use client";
+
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { SidebarProvider } from "@/components/providers/sidebar-provider";
+import { ProfileProvider } from "@/components/providers/profile-provider";
 
 export default function DashboardLayout({
   children,
@@ -7,12 +11,16 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen">
-      <Sidebar />
-      <div className="ml-64">
-        <Header />
-        <main className="p-6">{children}</main>
-      </div>
-    </div>
+    <SidebarProvider>
+      <ProfileProvider>
+        <div className="min-h-screen mesh-bg">
+          <Sidebar />
+          <div className="md:ml-64">
+            <Header />
+            <main className="p-4 md:p-6 max-w-[1400px]">{children}</main>
+          </div>
+        </div>
+      </ProfileProvider>
+    </SidebarProvider>
   );
 }
