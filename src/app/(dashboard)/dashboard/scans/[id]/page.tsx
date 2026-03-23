@@ -10,18 +10,25 @@ import {
   List,
   Download,
   RefreshCw,
-  Globe,
   Star,
   MessageSquare,
   ArrowUpDown,
   Filter,
   AlertTriangle,
   Eye,
-  Share2,
   Search,
   Trash2,
   ExternalLink,
   MessageCircle,
+  Target,
+  Globe2,
+  Paintbrush,
+  AtSign,
+  CalendarCheck,
+  Phone,
+  MessageSquareDashed,
+  ThumbsDown,
+  Flame,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +84,7 @@ export default function ScanDetailPage() {
   const [filterCategory, setFilterCategory] = useState("");
   const [filterScore, setFilterScore] = useState("");
   const [searchText, setSearchText] = useState("");
+  const [serviceNeed, setServiceNeed] = useState("");
   const [exporting, setExporting] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -212,6 +220,33 @@ export default function ScanDetailPage() {
       });
     }
 
+    // Service need filters — find businesses that need YOUR services
+    if (serviceNeed) {
+      list = list.filter((b) => {
+        const a = b.analysis;
+        switch (serviceNeed) {
+          case "no-website":
+            return !a?.has_website && !b.website_url;
+          case "bad-website":
+            return a?.has_website && (!a?.website_ssl || !a?.website_responsive);
+          case "no-social":
+            return !a?.has_social_media;
+          case "no-booking":
+            return !a?.has_booking;
+          case "no-whatsapp":
+            return !a?.has_whatsapp;
+          case "low-reviews":
+            return b.review_count < 10;
+          case "no-response":
+            return (a?.review_response_rate ?? 0) === 0;
+          case "needs-everything":
+            return (a?.opportunity_score ?? 0) >= 70 && !a?.has_website;
+          default:
+            return true;
+        }
+      });
+    }
+
     list.sort((a, b) => {
       let valA: number, valB: number;
       switch (sortKey) {
@@ -235,7 +270,7 @@ export default function ScanDetailPage() {
     });
 
     return list;
-  }, [businesses, searchText, filterCategory, filterScore, sortKey, sortDir]);
+  }, [businesses, searchText, filterCategory, filterScore, serviceNeed, sortKey, sortDir]);
 
   // ── Score summary ────────────────────────────────────────────
   const summary = useMemo(() => {
@@ -521,7 +556,42 @@ export default function ScanDetailPage() {
           {/* List View tab */}
           {activeTab === "list" && (
             <Card className="glass overflow-hidden">
-              {/* Filters */}
+              {/* Service Need Quick Filters */}
+              <div className="p-4 border-b border-border">
+                <div className="flex items-center gap-2 mb-3">
+                  <Target className="h-4 w-4 text-blue-400" />
+                  <span className="text-sm font-medium">Find clients that need:</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: "", label: "All", icon: Filter, color: "" },
+                    { key: "no-website", label: "Pagina Web", icon: Globe2, color: "text-red-400" },
+                    { key: "bad-website", label: "Rediseño Web", icon: Paintbrush, color: "text-orange-400" },
+                    { key: "no-social", label: "Redes Sociales", icon: AtSign, color: "text-pink-400" },
+                    { key: "no-booking", label: "Sistema de Reservas", icon: CalendarCheck, color: "text-purple-400" },
+                    { key: "no-whatsapp", label: "WhatsApp Business", icon: Phone, color: "text-green-400" },
+                    { key: "low-reviews", label: "Reputacion Online", icon: MessageSquareDashed, color: "text-yellow-400" },
+                    { key: "no-response", label: "Atencion al Cliente", icon: ThumbsDown, color: "text-amber-400" },
+                    { key: "needs-everything", label: "Necesitan Todo", icon: Flame, color: "text-red-500" },
+                  ].map((f) => (
+                    <button
+                      key={f.key}
+                      onClick={() => setServiceNeed(serviceNeed === f.key ? "" : f.key)}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all border",
+                        serviceNeed === f.key
+                          ? "bg-blue-500/15 border-blue-500/30 text-blue-400"
+                          : "bg-card/40 border-border/40 text-muted-foreground hover:bg-card/80 hover:text-foreground"
+                      )}
+                    >
+                      <f.icon className={cn("h-3.5 w-3.5", serviceNeed === f.key ? "text-blue-400" : f.color)} />
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Search & Category Filters */}
               <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 p-4 border-b border-border">
                 <div className="relative w-full sm:w-56">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -532,18 +602,15 @@ export default function ScanDetailPage() {
                     className="pl-8"
                   />
                 </div>
-                <div className="flex items-center gap-3">
-                  <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <Select
-                    options={[
-                      { value: "", label: "All Categories" },
-                      ...categories.map((c) => ({ value: c, label: c })),
-                    ]}
-                    value={filterCategory}
-                    onChange={(e) => setFilterCategory(e.target.value)}
-                    className="w-full sm:w-48"
-                  />
-                </div>
+                <Select
+                  options={[
+                    { value: "", label: "All Categories" },
+                    ...categories.map((c) => ({ value: c, label: c })),
+                  ]}
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="w-full sm:w-48"
+                />
                 <Select
                   options={[
                     { value: "", label: "All Scores" },
@@ -599,10 +666,7 @@ export default function ScanDetailPage() {
                         </button>
                       </th>
                       <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">
-                        Website
-                      </th>
-                      <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">
-                        Social
+                        Needs
                       </th>
                       <th className="text-right text-xs font-medium text-muted-foreground uppercase tracking-wider px-4 py-3">
                         Actions
@@ -675,18 +739,38 @@ export default function ScanDetailPage() {
                             </Badge>
                           </td>
                           <td className="px-4 py-3">
-                            {hasWebsite ? (
-                              <Globe className="h-4 w-4 text-green-400" />
-                            ) : (
-                              <Globe className="h-4 w-4 text-red-400/50" />
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            {hasSocial ? (
-                              <Share2 className="h-4 w-4 text-green-400" />
-                            ) : (
-                              <Share2 className="h-4 w-4 text-red-400/50" />
-                            )}
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {!hasWebsite && (
+                                <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-red-500/10 text-red-400 border border-red-500/20" title="Needs website">
+                                  <Globe2 className="h-3 w-3" />Web
+                                </span>
+                              )}
+                              {hasWebsite && (!biz.analysis?.website_ssl || !biz.analysis?.website_responsive) && (
+                                <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-orange-500/10 text-orange-400 border border-orange-500/20" title="Website needs improvement">
+                                  <Paintbrush className="h-3 w-3" />Fix
+                                </span>
+                              )}
+                              {!hasSocial && (
+                                <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-pink-500/10 text-pink-400 border border-pink-500/20" title="Needs social media">
+                                  <AtSign className="h-3 w-3" />Social
+                                </span>
+                              )}
+                              {!biz.analysis?.has_booking && (
+                                <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20" title="Needs booking system">
+                                  <CalendarCheck className="h-3 w-3" />Booking
+                                </span>
+                              )}
+                              {!biz.analysis?.has_whatsapp && biz.phone && (
+                                <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-green-500/10 text-green-400 border border-green-500/20" title="Needs WhatsApp Business">
+                                  <Phone className="h-3 w-3" />WA
+                                </span>
+                              )}
+                              {hasWebsite && hasSocial && biz.analysis?.has_booking && (
+                                <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                  OK
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end gap-1">
@@ -719,7 +803,7 @@ export default function ScanDetailPage() {
                     })}
                     {filtered.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                        <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                           No businesses match the current filters.
                         </td>
                       </tr>
