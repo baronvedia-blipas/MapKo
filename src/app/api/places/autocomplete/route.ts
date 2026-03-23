@@ -1,11 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
 const API_KEY = process.env.GOOGLE_PLACES_API_KEY!;
 
 /**
  * GET /api/places/autocomplete?q=santa+cruz
  * Returns place suggestions restricted to LATAM countries.
+ * Requires authentication. Rate limited to 10 requests/second per user.
  */
+
+// ── In-memory rate limiter ───────────────────────────────────
+const rateLimitMap = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 1000; // 1 second
+const RATE_LIMIT_MAX = 10; // max requests per window
+
+function isRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const timestamps = rateLimitMap.get(userId) ?? [];
+  // Remove timestamps outside the window
+  const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (recent.length >= RATE_LIMIT_MAX) {
+    rateLimitMap.set(userId, recent);
+    return true;
+  }
+  recent.push(now);
+  rateLimitMap.set(userId, recent);
+  return false;
+}
 
 const ALLOWED_COUNTRIES = [
   "bo", // Bolivia (priority)
@@ -19,6 +40,24 @@ const ALLOWED_COUNTRIES = [
 ];
 
 export async function GET(req: NextRequest) {
+  // ── Auth check ─────────────────────────────────────────────
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // ── Rate limiting ──────────────────────────────────────────
+  if (isRateLimited(user.id)) {
+    return NextResponse.json(
+      { error: "Too many requests. Please slow down." },
+      { status: 429 }
+    );
+  }
+
   const query = req.nextUrl.searchParams.get("q");
   if (!query || query.length < 2) {
     return NextResponse.json({ predictions: [] });

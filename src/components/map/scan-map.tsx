@@ -147,7 +147,7 @@ export function ScanMap({ businesses, center, radiusKm }: ScanMapProps) {
 
   if (!apiKey) {
     return (
-      <div className="h-[500px] bg-slate-800/50 flex items-center justify-center rounded-lg">
+      <div className="h-[300px] md:h-[500px] bg-slate-800/50 flex items-center justify-center rounded-lg">
         <p className="text-muted-foreground">
           Google Maps API key not configured
         </p>
@@ -157,7 +157,7 @@ export function ScanMap({ businesses, center, radiusKm }: ScanMapProps) {
 
   return (
     <APIProvider apiKey={apiKey}>
-      <div className="h-[500px] rounded-lg overflow-hidden relative">
+      <div className="h-[300px] md:h-[500px] rounded-lg overflow-hidden relative">
         <Map
           defaultCenter={center}
           defaultZoom={getZoomForRadius(radiusKm)}
@@ -176,27 +176,27 @@ export function ScanMap({ businesses, center, radiusKm }: ScanMapProps) {
         </Map>
 
         {/* Legend */}
-        <div className="absolute bottom-4 left-4 bg-slate-900/90 backdrop-blur-sm rounded-lg px-4 py-3 border border-white/10">
-          <p className="text-xs font-medium text-white/80 mb-2">Opportunity Score</p>
-          <div className="flex items-center gap-4 text-xs">
-            <span className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-red-500" />
+        <div className="absolute bottom-2 left-2 sm:bottom-4 sm:left-4 bg-slate-900/90 backdrop-blur-sm rounded-lg px-2 py-2 sm:px-4 sm:py-3 border border-white/10">
+          <p className="text-[10px] sm:text-xs font-medium text-white/80 mb-1 sm:mb-2">Opportunity Score</p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-[10px] sm:text-xs">
+            <span className="flex items-center gap-1 sm:gap-1.5">
+              <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-red-500" />
               <span className="text-white/70">High (70+)</span>
             </span>
-            <span className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-amber-500" />
+            <span className="flex items-center gap-1 sm:gap-1.5">
+              <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-amber-500" />
               <span className="text-white/70">Medium (40-69)</span>
             </span>
-            <span className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-green-500" />
+            <span className="flex items-center gap-1 sm:gap-1.5">
+              <div className="w-2 h-2 sm:w-3 sm:h-3 rounded-full bg-green-500" />
               <span className="text-white/70">Low (0-39)</span>
             </span>
           </div>
         </div>
 
         {/* Business count */}
-        <div className="absolute top-4 right-4 bg-slate-900/90 backdrop-blur-sm rounded-lg px-3 py-2 border border-white/10">
-          <p className="text-xs text-white/80">
+        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-slate-900/90 backdrop-blur-sm rounded-lg px-2 py-1 sm:px-3 sm:py-2 border border-white/10">
+          <p className="text-[10px] sm:text-xs text-white/80">
             <span className="font-bold text-white">{businesses.length}</span> businesses
           </p>
         </div>

@@ -116,11 +116,40 @@ export async function POST(req: NextRequest) {
     // In production, this would be a background job queue.
     // For MVP, we call our processing endpoint.
     const processingUrl = new URL("/api/scans/process", req.url);
-    fetch(processingUrl.toString(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ scanId: scan.id }),
-    }).catch(console.error);
+    try {
+      const processRes = fetch(processingUrl.toString(), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // Forward auth cookies so the process endpoint can verify the user
+          Cookie: req.headers.get("cookie") || "",
+        },
+        body: JSON.stringify({ scanId: scan.id }),
+      });
+
+      // Handle fetch rejection (network error, DNS failure, etc.)
+      processRes.catch(async (err) => {
+        console.error("Fire-and-forget scan processing failed:", err);
+        const failAdmin = createAdminClient();
+        await failAdmin
+          .from("scans")
+          .update({
+            status: "failed",
+            error_message: `Processing request failed: ${err instanceof Error ? err.message : "Unknown error"}`,
+          })
+          .eq("id", scan.id);
+      });
+    } catch (err) {
+      console.error("Failed to initiate scan processing:", err);
+      const failAdmin = createAdminClient();
+      await failAdmin
+        .from("scans")
+        .update({
+          status: "failed",
+          error_message: `Failed to start processing: ${err instanceof Error ? err.message : "Unknown error"}`,
+        })
+        .eq("id", scan.id);
+    }
 
     return NextResponse.json({ scan }, { status: 201 });
   } catch (error) {

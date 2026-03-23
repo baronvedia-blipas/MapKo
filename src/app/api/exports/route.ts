@@ -80,13 +80,26 @@ export async function POST(req: NextRequest) {
         headers
           .map((h) => {
             const val = String(row[h as keyof typeof row]);
-            return val.includes(",") || val.includes('"')
+            const needsQuoting =
+              val.includes(",") ||
+              val.includes('"') ||
+              val.includes("\n") ||
+              val.includes("\r");
+            return needsQuoting
               ? `"${val.replace(/"/g, '""')}"`
               : val;
           })
           .join(",")
       ),
     ];
+
+    // Track the export in the database
+    await admin.from("exports").insert({
+      user_id: user.id,
+      scan_id: scanId,
+      format: "csv",
+      file_url: "inline-download",
+    });
 
     return new NextResponse(csvLines.join("\n"), {
       headers: {
@@ -198,6 +211,14 @@ Best regards`,
   ]);
 
   const buffer = await workbook.xlsx.writeBuffer();
+
+  // Track the export in the database
+  await admin.from("exports").insert({
+    user_id: user.id,
+    scan_id: scanId,
+    format: "xlsx",
+    file_url: "inline-download",
+  });
 
   return new NextResponse(buffer, {
     headers: {

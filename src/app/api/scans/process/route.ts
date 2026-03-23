@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { searchNearbyBulk, getPlaceDetails } from "@/lib/google/places-client";
 import { mapGoogleTypeToCategory } from "@/lib/google/category-mapper";
@@ -48,6 +49,16 @@ async function withRetry<T>(
  * In production, replace with a proper job queue (e.g., Inngest, BullMQ).
  */
 export async function POST(req: NextRequest) {
+  // ── Auth check ─────────────────────────────────────────────
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { scanId } = await req.json();
   if (!scanId) {
     return NextResponse.json({ error: "Missing scanId" }, { status: 400 });
@@ -65,6 +76,11 @@ export async function POST(req: NextRequest) {
 
     if (!scan) {
       return NextResponse.json({ error: "Scan not found" }, { status: 404 });
+    }
+
+    // Verify the scan belongs to the authenticated user
+    if (scan.user_id !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     // Prevent re-processing a scan that is already in progress

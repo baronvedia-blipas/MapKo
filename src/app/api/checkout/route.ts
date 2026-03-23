@@ -31,6 +31,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ── Check if user already has the requested plan ─────────────
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("plan")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.plan === planId) {
+      return NextResponse.json(
+        { error: "You are already on this plan" },
+        { status: 400 }
+      );
+    }
+
     // ── Create Stripe Checkout Session ────────────────────────────
     const url = await createCheckoutSession(user.id, planId as StripePlanId);
 

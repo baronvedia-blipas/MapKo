@@ -73,10 +73,12 @@ export default function BusinessDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   async function handleDownloadPdf() {
     if (downloadingPdf) return;
     setDownloadingPdf(true);
+    setPdfError(null);
     try {
       const res = await fetch(`/api/businesses/${id}/report`);
       if (!res.ok) throw new Error("Failed to generate report");
@@ -91,8 +93,10 @@ export default function BusinessDetailPage() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch {
-      // Silently fail — could add toast notification here
+    } catch (err) {
+      setPdfError(
+        err instanceof Error ? err.message : "Failed to download PDF report"
+      );
     } finally {
       setDownloadingPdf(false);
     }
@@ -242,6 +246,9 @@ export default function BusinessDetailPage() {
                   )}
                   {downloadingPdf ? "Generating..." : "Download PDF Report"}
                 </Button>
+                {pdfError && (
+                  <p className="text-red-400 text-xs mt-1">{pdfError}</p>
+                )}
               </div>
             </div>
 
