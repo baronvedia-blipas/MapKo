@@ -180,17 +180,22 @@ export async function POST(req: NextRequest) {
               let lastReviewDate: string | null = null;
               let hasBooking = false;
 
-              // Fetch place details only if business might have more data
-              // Skip Place Details for businesses with no website from Nearby Search
-              // — they likely lack online presence, so score them directly
-              const needsDetails = biz.website_url || biz.review_count > 5;
-
-              if (needsDetails) {
+              // Always fetch Place Details to get phone numbers for WhatsApp contact
+              {
                 try {
                   const details = await withRetry(
                     () => getPlaceDetails({ placeId: biz.place_id }),
                     `getPlaceDetails(${biz.place_id})`
                   );
+
+                  // Update phone if found
+                  if (details.nationalPhoneNumber && !biz.phone) {
+                    biz.phone = details.nationalPhoneNumber;
+                    await admin
+                      .from("businesses")
+                      .update({ phone: details.nationalPhoneNumber })
+                      .eq("id", biz.id);
+                  }
 
                   if (details.websiteUri && !biz.website_url) {
                     biz.website_url = details.websiteUri;
