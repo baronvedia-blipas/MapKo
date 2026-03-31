@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { searchNearbyBulk, getPlaceDetails } from "@/lib/google/places-client";
 import { mapGoogleTypeToCategory } from "@/lib/google/category-mapper";
+import { BUSINESS_CATEGORIES } from "@/types";
 import { analyzeWebsite } from "@/lib/analyzer/website-checker";
 import { calculateOpportunityScore } from "@/lib/analyzer/score-calculator";
 import { sendScanCompleteEmail } from "@/lib/email/scan-notification";
@@ -98,8 +99,11 @@ export async function POST(req: NextRequest) {
       .eq("id", scanId);
 
     // Search for businesses
+    // Convert UI category names (e.g. "Barberias") to Google Place types (e.g. "hair_care")
     const includedTypes =
-      scan.categories.length > 0 ? scan.categories : undefined;
+      scan.categories.length > 0
+        ? scan.categories.flatMap((cat: string) => BUSINESS_CATEGORIES[cat] || [])
+        : undefined;
 
     const places = await withRetry(
       () =>
