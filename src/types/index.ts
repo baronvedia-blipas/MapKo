@@ -136,10 +136,15 @@ export interface PlaceReview {
 
 // ─── Google category mapping ──────────────────────────────────
 export const BUSINESS_CATEGORIES: Record<string, string[]> = {
-  "Restaurants": ["restaurant", "cafe", "bakery", "bar", "meal_delivery", "meal_takeaway", "food"],
+  // ── High-value targets (easy to sell digital services) ──
+  "Barberias": ["hair_care"],
+  "Restaurantes": ["restaurant", "cafe", "bakery", "bar", "meal_delivery", "meal_takeaway", "food"],
+  "Tiendas de Ropa": ["clothing_store", "shoe_store"],
+  "Perfumerias": ["beauty_salon", "spa"],
+  // ── Other categories ──
   "Health & Beauty": ["beauty_salon", "hair_care", "spa", "physiotherapist"],
   "Medical": ["doctor", "hospital", "pharmacy", "veterinary_care", "health", "dentist"],
-  "Retail": ["store", "clothing_store", "shoe_store", "jewelry_store", "electronics_store", "furniture_store", "hardware_store", "pet_store", "florist", "convenience_store", "supermarket"],
+  "Retail": ["store", "jewelry_store", "electronics_store", "furniture_store", "hardware_store", "pet_store", "florist", "convenience_store", "supermarket"],
   "Services": ["plumber", "electrician", "lawyer", "accounting", "insurance_agency", "real_estate_agency", "locksmith", "painter", "moving_company", "travel_agency"],
   "Automotive": ["car_repair", "car_dealer", "car_wash", "gas_station", "car_rental", "parking"],
   "Education": ["school", "university", "library", "book_store"],
