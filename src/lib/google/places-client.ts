@@ -25,6 +25,18 @@ interface GeocodingResult {
   formattedAddress: string;
 }
 
+// Google Places API legacy uses slightly different type names
+const LEGACY_TYPE_MAP: Record<string, string> = {
+  hair_care: "hair_salon",
+  beauty_salon: "beauty_salon",
+  clothing_store: "clothing_store",
+  shoe_store: "shoe_store",
+};
+
+function toLegacyType(type: string): string {
+  return LEGACY_TYPE_MAP[type] || type;
+}
+
 // ─── Nearby Search ────────────────────────────────────────────
 export async function searchNearby({
   lat,
@@ -39,7 +51,7 @@ export async function searchNearby({
   url.searchParams.set("key", API_KEY);
 
   if (includedTypes.length > 0) {
-    url.searchParams.set("type", includedTypes[0]);
+    url.searchParams.set("type", toLegacyType(includedTypes[0]));
   }
 
   if (pageToken) {

@@ -113,42 +113,39 @@ export async function POST(req: NextRequest) {
       .eq("user_id", user.id);
 
     // Trigger async processing (fire-and-forget)
-    // In production, this would be a background job queue.
-    // For MVP, we call our processing endpoint.
+    // Use AbortController with 10 min timeout for large scans
     const processingUrl = new URL("/api/scans/process", req.url);
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 600_000); // 10 min
+
       const processRes = fetch(processingUrl.toString(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // Forward auth cookies so the process endpoint can verify the user
           Cookie: req.headers.get("cookie") || "",
         },
         body: JSON.stringify({ scanId: scan.id }),
+        signal: controller.signal,
       });
 
-      // Handle fetch rejection (network error, DNS failure, etc.)
-      processRes.catch(async (err) => {
-        console.error("Fire-and-forget scan processing failed:", err);
-        const failAdmin = createAdminClient();
-        await failAdmin
-          .from("scans")
-          .update({
-            status: "failed",
-            error_message: `Processing request failed: ${err instanceof Error ? err.message : "Unknown error"}`,
-          })
-          .eq("id", scan.id);
-      });
+      processRes
+        .then(() => clearTimeout(timeout))
+        .catch(async (err) => {
+          clearTimeout(timeout);
+          if (err.name === "AbortError") return; // timeout — scan may still complete via admin
+          console.error("Fire-and-forget scan processing failed:", err);
+          const failAdmin = createAdminClient();
+          await failAdmin
+            .from("scans")
+            .update({
+              status: "failed",
+              error_message: `Processing request failed: ${err instanceof Error ? err.message : "Unknown error"}`,
+            })
+            .eq("id", scan.id);
+        });
     } catch (err) {
       console.error("Failed to initiate scan processing:", err);
-      const failAdmin = createAdminClient();
-      await failAdmin
-        .from("scans")
-        .update({
-          status: "failed",
-          error_message: `Failed to start processing: ${err instanceof Error ? err.message : "Unknown error"}`,
-        })
-        .eq("id", scan.id);
     }
 
     return NextResponse.json({ scan }, { status: 201 });
